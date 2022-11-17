@@ -246,10 +246,36 @@ pub fn subscribe_to_feed(
     Ok(feed_id)
 }
 
-fn fetch_feed(http_client: &ureq::Agent, url: &str) -> Result<FeedAndEntries> {
+/// Fetches the feed from the remote url or from the local file location.
+fn fetch_feed(http_client: &ureq::Agent, uri: &str) -> Result<FeedAndEntries> {
+    if uri.starts_with("file:///") {
+        fetch_feed_from_file(uri)
+    } else if uri.starts_with("http://") || uri.starts_with("https://") {
+        fetch_feed_from_remote(http_client, uri)
+    } else {
+        Err(anyhow::anyhow!(format!("{} is not a valid uri scheme", uri)))
+    }
+}
+
+/// Fetches the feed content from the remote url
+fn fetch_feed_from_remote(http_client: &ureq::Agent, url: &str) -> Result<FeedAndEntries> {
     let resp = http_client.get(url).call()?.into_string()?;
     let mut feed = FeedAndEntries::from_str(&resp)?;
     feed.set_feed_link(url);
+
+    Ok(feed)
+}
+
+/// Fetches the feed content from the specified file path
+/// TODO: works within the russ viewier, but not within the browser
+fn fetch_feed_from_file(uri: &str) -> Result<FeedAndEntries> {
+
+    let path = std::path::PathBuf::from(uri.split("file://").last().unwrap());
+    let raw_feed =  std::fs::read_to_string(path)?;
+    //let resp = http_client.get(url).call()?.into_string()?;
+    let mut feed = FeedAndEntries::from_str(&raw_feed)?;
+    /// this will proably have to change to open the link the brower
+    feed.set_feed_link(uri);
 
     Ok(feed)
 }
@@ -269,6 +295,7 @@ pub fn refresh_feed(
         )
     })?;
 
+    // TODO: maybe here?
     let remote_feed: FeedAndEntries = fetch_feed(client, &feed_url)
         .with_context(|| format!("Failed to fetch feed {}", feed_url))?;
 
@@ -502,15 +529,15 @@ pub fn get_feed_url(conn: &rusqlite::Connection, feed_id: FeedId) -> Result<Stri
 
 pub fn get_feeds(conn: &rusqlite::Connection) -> Result<Vec<Feed>> {
     let mut statement = conn.prepare(
-        "SELECT 
-          id, 
-          title, 
-          feed_link, 
-          link, 
-          feed_kind, 
-          refreshed_at, 
-          inserted_at, 
-          updated_at 
+        "SELECT
+          id,
+          title,
+          feed_link,
+          link,
+          feed_kind,
+          refreshed_at,
+          inserted_at,
+          updated_at
         FROM feeds ORDER BY lower(title) ASC",
     )?;
     let mut feeds = vec![];
@@ -544,16 +571,16 @@ pub fn get_feed_ids(conn: &rusqlite::Connection) -> Result<Vec<FeedId>> {
 
 pub fn get_entry_meta(conn: &rusqlite::Connection, entry_id: EntryId) -> Result<EntryMeta> {
     let result = conn.query_row(
-        "SELECT 
-          id, 
-          feed_id, 
-          title, 
-          author, 
-          pub_date, 
-          link, 
-          read_at, 
-          inserted_at, 
-          updated_at 
+        "SELECT
+          id,
+          feed_id,
+          title,
+          author,
+          pub_date,
+          link,
+          read_at,
+          inserted_at,
+          updated_at
         FROM entries WHERE id=?1",
         [entry_id],
         |row| {
@@ -602,17 +629,17 @@ pub fn get_entries_metas(
 
     // we get weird pubDate formats from feeds,
     // so sort by inserted at as this as a stable order at least
-    let mut query = "SELECT 
-        id, 
-        feed_id, 
-        title, 
-        author, 
-        pub_date, 
-        link, 
-        read_at, 
-        inserted_at, 
-        updated_at 
-        FROM entries 
+    let mut query = "SELECT
+        id,
+        feed_id,
+        title,
+        author,
+        pub_date,
+        link,
+        read_at,
+        inserted_at,
+        updated_at
+        FROM entries
         WHERE feed_id=?1"
         .to_string();
 
