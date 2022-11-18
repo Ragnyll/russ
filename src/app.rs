@@ -4,6 +4,10 @@ use anyhow::Result;
 use copypasta::{ClipboardContext, ClipboardProvider};
 use crossterm::event::{KeyCode, KeyModifiers};
 use std::sync::{Arc, Mutex};
+use tempfile::NamedTempFile;
+use tempfile::tempdir;
+use std::fs::File;
+use std::io::{self, Write};
 use tui::{backend::CrosstermBackend, Terminal};
 
 macro_rules! delegate_to_locked_inner {
@@ -593,9 +597,34 @@ impl AppImpl {
         }
     }
 
+    /// If the link contains a supported protocol return true
+    fn contains_protocol(link: &str) -> bool {
+        // TODO: are there other valid proto types?
+        return link.starts_with("http://") || link.starts_with("https://")
+    }
+
     fn open_link_in_browser(&self) -> Result<()> {
+        // TODO: this is where i need to figure out the link type
+        // if link is path then create a temp html file to open
         if let Some(current_link) = self.get_current_link() {
-            webbrowser::open(current_link).map_err(|e| anyhow::anyhow!(e))
+            // we need an owned version of current_link in order to modify its contents
+            // TODO: make this this a COW
+            let mut current_link = String::from(current_link);
+            // if the curent link does not contain a protocol it is for an entry in a local rss
+            // file
+            if  !Self::contains_protocol(&current_link) {
+                if let Some(entry) = self.get_selected_entry() {
+                    let mut file = File::create("/home/ragnyll/.cache/test_me.html")?;
+                    write!(file, "{}", entry.unwrap().content.unwrap())?;
+
+                    // rewrite the current_link to the file path created tempfile
+                    // this may not work on windows.
+                    current_link = format!("file://{}", "/home/ragnyll/.cache/test_me.html");
+                    println!("current link {}", current_link);
+                    webbrowser::open(&current_link).map_err(|e| anyhow::anyhow!(e));
+                };
+            }
+            webbrowser::open(&current_link).map_err(|e| anyhow::anyhow!(e))
         } else {
             Ok(())
         }
