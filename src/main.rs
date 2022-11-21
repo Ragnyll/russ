@@ -18,6 +18,7 @@ use tui::backend::CrosstermBackend;
 use tui::Terminal;
 
 mod app;
+mod cache;
 mod modes;
 mod rss;
 mod ui;

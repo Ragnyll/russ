@@ -253,7 +253,10 @@ fn fetch_feed(http_client: &ureq::Agent, uri: &str) -> Result<FeedAndEntries> {
     } else if uri.starts_with("http://") || uri.starts_with("https://") {
         fetch_feed_from_remote(http_client, uri)
     } else {
-        Err(anyhow::anyhow!(format!("{} is not a valid uri scheme", uri)))
+        Err(anyhow::anyhow!(format!(
+            "{} is not a valid uri scheme",
+            uri
+        )))
     }
 }
 
@@ -269,9 +272,8 @@ fn fetch_feed_from_remote(http_client: &ureq::Agent, url: &str) -> Result<FeedAn
 /// Fetches the feed content from the specified file path
 /// TODO: works within the russ viewier, but not within the browser
 fn fetch_feed_from_file(uri: &str) -> Result<FeedAndEntries> {
-
     let path = std::path::PathBuf::from(uri.split("file://").last().unwrap());
-    let raw_feed =  std::fs::read_to_string(path)?;
+    let raw_feed = std::fs::read_to_string(path)?;
     //let resp = http_client.get(url).call()?.into_string()?;
     let mut feed = FeedAndEntries::from_str(&raw_feed)?;
     /// this will proably have to change to open the link the brower
