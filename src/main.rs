@@ -120,6 +120,7 @@ fn io_loop(
 
     let manager = r2d2_sqlite::SqliteConnectionManager::file(&options.database_path);
     let connection_pool = r2d2::Pool::new(manager)?;
+    let local_rss_content_cache = cache::Cache::new();
 
     while let Ok(event) = rx.recv() {
         match event {

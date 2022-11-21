@@ -5,7 +5,6 @@ use anyhow::Result;
 use copypasta::{ClipboardContext, ClipboardProvider};
 use crossterm::event::{KeyCode, KeyModifiers};
 use std::{
-    borrow::Cow,
     convert::From,
     sync::{Arc, Mutex},
     path::PathBuf,
@@ -66,7 +65,6 @@ impl<'a> Browser for LinkType<'a> {
 
 /// If the link contains a supported protocol return true
 fn has_protocol(link: &str) -> bool {
-    // TODO: are there other valid proto types?
     return link.starts_with("http://") || link.starts_with("https://");
 }
 
@@ -218,6 +216,8 @@ impl App {
 pub struct AppImpl {
     // database stuff
     pub conn: rusqlite::Connection,
+    // local rss entry content cache
+    pub local_cache: Cache,
     // network stuff
     pub http_client: ureq::Agent,
     // feed stuff
@@ -252,6 +252,7 @@ impl AppImpl {
         event_s: std::sync::mpsc::Sender<crate::Event<crossterm::event::KeyEvent>>,
     ) -> Result<AppImpl> {
         let mut conn = rusqlite::Connection::open(&options.database_path)?;
+        let local_cache = Cache::new()?;
 
         let http_client = ureq::AgentBuilder::new()
             .timeout_read(options.network_timeout)
@@ -270,6 +271,7 @@ impl AppImpl {
 
         let mut app = AppImpl {
             conn,
+            local_cache,
             http_client,
             should_quit: false,
             error_flash: vec![],
@@ -620,6 +622,20 @@ impl AppImpl {
         }
     }
 
+    /// Get the id of the current selection
+    fn get_current_id(&self) -> Option<i64> {
+        match &self.selected {
+            Selected::Feeds => self.current_feed.as_ref().and_then(|feed| Some(feed.id)),
+            Selected::Entries => self
+                .entries
+                .items
+                .get(self.entry_selection_position)
+                .and_then(|entry| Some(entry.id)),
+            Selected::Entry(e) => Some(e.id),
+            Selected::None => None,
+        }
+    }
+
     fn put_current_link_in_clipboard(&mut self) -> Result<()> {
         let current_link = self.get_current_link();
 
@@ -648,8 +664,18 @@ impl AppImpl {
 
     /// Open the entry in the browser by navigating to the site or loading the entry's content
     fn open_link_in_browser(&self) -> Result<()> {
+        // TODO: perhaps its faster to do it just with ID from the get go? optimization for later
         if let Some(current_link) = self.get_current_link() {
             let link = LinkType::from(current_link);
+            // cache the content of the current link
+            if matches!(link, LinkType::File { .. }) {
+                // TODO: get the content out of that mug
+                // TODO: dont unwrap on this
+                self.local_cache.cache_as_file(
+                    &self.get_current_id().unwrap().to_string(),
+                    "<html><h1>AYOOOOO</h1></html>",
+                )?
+            }
             link.open()
         } else {
             Ok(())

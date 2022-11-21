@@ -274,9 +274,9 @@ fn fetch_feed_from_remote(http_client: &ureq::Agent, url: &str) -> Result<FeedAn
 fn fetch_feed_from_file(uri: &str) -> Result<FeedAndEntries> {
     let path = std::path::PathBuf::from(uri.split("file://").last().unwrap());
     let raw_feed = std::fs::read_to_string(path)?;
-    //let resp = http_client.get(url).call()?.into_string()?;
     let mut feed = FeedAndEntries::from_str(&raw_feed)?;
-    /// this will proably have to change to open the link the brower
+    // this will proably have to change to open the link the brower
+    // TODO: I dont know that i like the way this sets the feed link as the uri...
     feed.set_feed_link(uri);
 
     Ok(feed)
