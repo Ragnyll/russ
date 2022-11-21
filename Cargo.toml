@@ -19,7 +19,6 @@ r2d2 = "0.8"
 r2d2_sqlite = "0.21"
 rss = { version = "2.0", default-features = false }
 rusqlite = { version = "0.28", features = ["bundled", "chrono"] }
-tempfile = "3.3"
 tui = "0.18"
 ureq = "2.5"
 webbrowser = "0.7"

@@ -7,12 +7,9 @@ use crossterm::event::{KeyCode, KeyModifiers};
 use std::{
     borrow::Cow,
     convert::From,
-    fs::File,
     sync::{Arc, Mutex},
-    io::{self, Write},
     path::PathBuf,
 };
-use tempfile::{tempdir, NamedTempFile};
 use tui::{backend::CrosstermBackend, Terminal};
 
 macro_rules! delegate_to_locked_inner {
@@ -37,11 +34,34 @@ macro_rules! delegate_to_locked_mut_inner {
     };
 }
 
+/// Enables opening things within a web browser
+trait Browser {
+    /// open the type in a web browser
+    fn open(&self) -> Result<()>;
+}
+
 /// A piece of meta information on an RSS entry's link.
 #[derive(Debug)]
 enum LinkType<'a> {
     Web { address: &'a str },
     File { path: PathBuf },
+}
+
+impl<'a> Browser for LinkType<'a> {
+    fn open(&self) -> Result<()> {
+        match self {
+            Self::Web { address } => webbrowser::open(&address).map_err(|e| anyhow::anyhow!(e))?,
+            Self::File { path } => {
+                let content = "<html><h1>fuck</h1></html>";
+                let cache = Cache::new()?;
+                cache.cache_as_file("thing.html", content)?;
+                webbrowser::open("/home/ragnyll/.cache/russ/thing.html")
+                    .map_err(|e| anyhow::anyhow!(e))?
+            }
+        }
+
+        Ok(())
+    }
 }
 
 /// If the link contains a supported protocol return true
@@ -626,31 +646,11 @@ impl AppImpl {
         }
     }
 
-    /// The link path will sometimes be modified into a Path which requires an owned value
-    fn get_link_path(link: &str) -> Cow<str> {
-        // if there is a valid protocol to follow dont modify it and return the borrowed value
-        if !link.starts_with("http://") || link.starts_with("https://") {
-            return Cow::Borrowed(link);
-        }
-        Cow::Owned(format!("file://{}", "/home/ragnyll/.cache/test_me.html"))
-    }
-
     /// Open the entry in the browser by navigating to the site or loading the entry's content
     fn open_link_in_browser(&self) -> Result<()> {
         if let Some(current_link) = self.get_current_link() {
             let link = LinkType::from(current_link);
-            match link {
-                LinkType::Web { address } => {
-                    webbrowser::open(&address).map_err(|e| anyhow::anyhow!(e))
-                }
-                LinkType::File { path } => {
-                    let content = "<html><h1>fuck</h1></html>";
-                    let cache = Cache::new()?;
-                    cache.cache_as_file("thing.html", content)?;
-                    webbrowser::open("/home/ragnyll/.cache/russ/thing.html")
-                        .map_err(|e| anyhow::anyhow!(e))
-                }
-            }
+            link.open()
         } else {
             Ok(())
         }
